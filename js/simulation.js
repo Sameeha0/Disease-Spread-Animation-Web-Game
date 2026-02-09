@@ -486,14 +486,73 @@
       const h = c.height;
       const len = this.timeseries.length;
       const max = Math.max(...this.timeseries.map(s => s.infected + s.recovered + s.vaccinated + s.healthy));
+      
+      // Chart padding
+      const padLeft = 50 * dpr;
+      const padRight = 10 * dpr;
+      const padTop = 10 * dpr;
+      const padBottom = 30 * dpr;
+      const chartW = w - padLeft - padRight;
+      const chartH = h - padTop - padBottom;
+
+      // Draw background grid and axes
+      ctx.fillStyle = 'rgba(0,0,0,0.1)';
+      ctx.fillRect(padLeft, padTop, chartW, chartH);
+      
+      // Draw Y-axis
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 1 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, padTop);
+      ctx.lineTo(padLeft, padTop + chartH);
+      ctx.stroke();
+      
+      // Draw X-axis
+      ctx.beginPath();
+      ctx.moveTo(padLeft, padTop + chartH);
+      ctx.lineTo(padLeft + chartW, padTop + chartH);
+      ctx.stroke();
+
+      // Draw Y-axis labels and grid
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.font = `${12 * dpr}px Arial`;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      
+      for (let i = 0; i <= 4; i++) {
+        const val = Math.round((max / 4) * i);
+        const y = padTop + chartH - (i / 4) * chartH;
+        
+        // Grid line
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 1 * dpr;
+        ctx.beginPath();
+        ctx.moveTo(padLeft, y);
+        ctx.lineTo(padLeft + chartW, y);
+        ctx.stroke();
+        
+        // Label
+        ctx.fillStyle = 'rgba(200,200,255,0.8)';
+        ctx.fillText(val, padLeft - 8 * dpr, y);
+      }
+      
+      // Draw X-axis time labels
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(200,200,255,0.8)';
+      for (let i = 0; i <= 4; i++) {
+        const idx = Math.floor((i / 4) * (len - 1));
+        const t = this.timeseries[idx].t;
+        const x = padLeft + (i / 4) * chartW;
+        ctx.fillText(t + 's', x, padTop + chartH + 20 * dpr);
+      }
 
       // Draw infected curve
       ctx.beginPath();
       ctx.strokeStyle = 'rgba(255,107,107,0.9)';
       ctx.lineWidth = 2 * dpr;
       for (let i = 0; i < len; i++) {
-        const x = (i / (len - 1)) * w;
-        const y = h - (this.timeseries[i].infected / max) * h;
+        const x = padLeft + (i / (len - 1)) * chartW;
+        const y = padTop + chartH - (this.timeseries[i].infected / max) * chartH;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -504,12 +563,30 @@
       ctx.strokeStyle = 'rgba(246,200,95,0.9)';
       ctx.lineWidth = 1.5 * dpr;
       for (let i = 0; i < len; i++) {
-        const x = (i / (len - 1)) * w;
-        const y = h - (this.timeseries[i].recovered / max) * h;
+        const x = padLeft + (i / (len - 1)) * chartW;
+        const y = padTop + chartH - (this.timeseries[i].recovered / max) * chartH;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
       ctx.stroke();
+      
+      // Draw legend
+      const legX = padLeft + 10 * dpr;
+      const legY = padTop + 5 * dpr;
+      
+      // Infected
+      ctx.fillStyle = 'rgba(255,107,107,0.9)';
+      ctx.fillRect(legX, legY, 10 * dpr, 10 * dpr);
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.font = `${11 * dpr}px Arial`;
+      ctx.textAlign = 'left';
+      ctx.fillText('Infected', legX + 14 * dpr, legY + 5 * dpr);
+      
+      // Recovered
+      ctx.fillStyle = 'rgba(246,200,95,0.9)';
+      ctx.fillRect(legX + 120 * dpr, legY, 10 * dpr, 10 * dpr);
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.fillText('Recovered', legX + 134 * dpr, legY + 5 * dpr);
     }
   }
 
