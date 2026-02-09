@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Disease Spread Simulation</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <div class="panel controls">
+      <h2 style="margin:0 0 8px;color:#e6f3ff">Disease Spread Simulation</h2>
+      <div class="small" style="margin-bottom:8px">Client-side simulation demonstrating infection dynamics, tuned for performance.</div>
+
+      <h3>Parameters</h3>
+      <label>Population: <span id="popVal">120</span>
+        <input id="population" type="range" min="20" max="400" value="120">
+      </label>
+
+      <label>Initial Infected: <span id="initVal">3</span>
+        <input id="initialInfected" type="range" min="1" max="50" value="3">
+      </label>
+
+      <label>Movement Speed: <span id="speedVal">1.0</span>
+        <input id="speed" type="range" min="0" max="3" step="0.1" value="1">
+      </label>
+
+      <label>Infection Radius: <span id="radiusVal">14</span>
+        <input id="radius" type="range" min="6" max="60" value="14">
+      </label>
+
+      <label>Base Infection Prob (%): <span id="probVal">45</span>
+        <input id="prob" type="range" min="0" max="100" value="45">
+      </label>
+
+      <label>Recovery Time (s): <span id="recVal">12</span>
+        <input id="recovery" type="range" min="2" max="60" value="12">
+      </label>
+
+      <label>Vaccinated (%): <span id="vacVal">0</span>
+        <input id="vaccinated" type="range" min="0" max="100" value="0">
+      </label>
+
+      <div style="margin-top:8px" class="row">
+        <button id="start">Start</button>
+        <button id="pause" class="secondary">Pause</button>
+        <button id="reset" class="secondary">Reset</button>
+      </div>
+
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="preset" id="presetFast">Fast Spread</button>
+        <button class="preset" id="presetVacc">Vaccinated</button>
+        <button class="preset" id="presetLow">Low Spread</button>
+      </div>
+
+      <h3 style="margin-top:10px">Export / Options</h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="exportCSV" class="secondary">Export CSV</button>
+        <button id="exportJSON" class="secondary">Export JSON</button>
+      </div>
+
+      <h3 style="margin-top:10px">Import Data</h3>
+      <div style="display:flex;gap:8px;flex-direction:column">
+        <input id="importFile" type="file" accept=".csv,.json" style="padding:6px;border-radius:6px;background:rgba(255,255,255,0.04);color:#e6eef8;border:1px solid rgba(255,255,255,0.08);cursor:pointer">
+        <button id="importBtn" class="secondary">Load Data</button>
+      </div>
+
+      <h3 style="margin-top:10px">Statistical Analysis</h3>
+      <div style="display:flex;gap:8px;flex-direction:column">
+        <button id="analyzeBtn" class="secondary">Analyze Data</button>
+        <div id="analysisResults" style="margin-top:8px;padding:8px;background:rgba(255,255,255,0.02);border-radius:6px;font-size:12px;max-height:200px;overflow-y:auto;display:none;color:#cfe7ff">
+          <div style="white-space:pre-wrap;font-family:monospace" id="analysisText"></div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px" class="small">Hover over agents on canvas to see details. You can change parameters during simulation.</div>
+    </div>
+
+    <div id="canvasWrap">
+      <div class="panel" style="flex:1;display:flex;flex-direction:column;padding:8px;">
+        <canvas id="simCanvas"></canvas>
+        <div class="stats" style="margin-top:8px">
+          <div class="stat"><span class="small">Healthy</span><b id="healthyCount">0</b></div>
+          <div class="stat"><span class="small">Infected</span><b id="infectedCount">0</b></div>
+          <div class="stat"><span class="small">Recovered</span><b id="recoveredCount">0</b></div>
+          <div class="stat"><span class="small">Vaccinated</span><b id="vaccinatedCount">0</b></div>
+        </div>
+
+        <canvas id="chart"></canvas>
+        <div class="footer">
+          <div class="small">Time: <span id="timeLabel">0s</span></div>
+          <div class="small">FPS: <span id="fps">0</span></div>
+        </div>
+        <div id="tooltip" class="tooltip" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/simulation.js" defer></script>
+</body>
+</html>
