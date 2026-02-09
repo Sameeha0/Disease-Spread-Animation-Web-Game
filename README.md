@@ -1,7 +1,6 @@
 # 🦠 Disease Spread Simulator & Analysis Dashboard
 
-Advanced disease spread simulator with interactive data visualization dashboard.
-Perfect portfolio project showcasing **agent-based modeling**, **real-time visualization**, and **data science** capabilities.
+Advanced disease spread simulator with interactive data visualization dashboard. showcasing **agent-based modeling**, **real-time visualization**, and **data science** capabilities.
 
 ---
 
@@ -10,27 +9,6 @@ Perfect portfolio project showcasing **agent-based modeling**, **real-time visua
 **Simulator:** [Add link after deploying to GitHub Pages]
 
 **Analysis Dashboard:** [Add link after deploying to Streamlit Cloud]
-
----
-
-## 🚀 Deploy Online (No Local Setup Required)
-
-### 1. Simulator on GitHub Pages
-```bash
-git push to GitHub
-Settings → Pages → Deploy from main branch
-Live: https://YOUR_USERNAME.github.io/disease-spread-simulator
-```
-
-### 2. Analysis Dashboard on Streamlit Cloud
-1. Go to https://streamlit.io/cloud
-2. Sign in with GitHub
-3. Click "New app" → Select repo → Select `streamlit_app.py`
-4. **Done!** Auto-deploys on every push
-
-Both will be live and share your GitHub repo!
-
----
 
 ## ✨ Key Features
 
@@ -163,17 +141,3 @@ Opens interactive dashboard at `http://localhost:8501`
 - Zero configuration required
 
 ---
-
-## 🔗 Live Links
-
-Get links here after deploying:
-
-```
-GitHub Pages (Simulator):  https://YOUR_USERNAME.github.io/disease-spread-simulator
-Streamlit Cloud (Dashboard): https://your-streamlit-app.streamlit.app
-```
-
-**To add your links:**
-1. Deploy simulator to GitHub Pages
-2. Deploy dashboard to Streamlit Cloud
-3. Update the links at the top of this README
