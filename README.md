@@ -7,6 +7,7 @@ Advanced disease spread simulator with interactive data visualization dashboard.
 ## 🔗 Live Demo
 
 **Simulator:** https://sameeha0.github.io/Disease-Spread-Animation-Web-Game/
+
 **Analysis Dashboard:** [Streamlit Cloud]](https://disease-spread-animation-web-game-tccqs9bdlxcy6uykdsx4mh.streamlit.app/)
 
 ## ✨ Key Features
@@ -146,5 +147,6 @@ Copyright © 2026 Sameeha. All rights reserved.
 This project is proprietary software. Unauthorized copying, modification, distribution, or use of this code, in whole or in part, for any purpose (commercial or non-commercial) is strictly prohibited without the prior written permission of the author.
 
 For permission requests, please contact: sameeharaza07@gmail.com
+
 
 
