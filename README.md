@@ -141,3 +141,9 @@ Opens interactive dashboard at `http://localhost:8501`
 - Zero configuration required
 
 ---
+## 📜 License
+Copyright © 2026 Sameeha. All rights reserved.
+
+This project is proprietary software. Unauthorized copying, modification, distribution, or use of this code, in whole or in part, for any purpose (commercial or non-commercial) is strictly prohibited without the prior written permission of the author.
+
+For permission requests, please contact: sameeharaza07@gmail.com
