@@ -10,9 +10,9 @@ Advanced disease spread simulator with interactive data visualization dashboard.
 
 **Analysis Dashboard:** [Streamlit Cloud]](https://disease-spread-animation-web-game-tccqs9bdlxcy6uykdsx4mh.streamlit.app/)
 
-## ✨ Key Features
+## Key Features
 
-### Simulator (index.html) 🎮
+### Simulator (index.html) 
 - **Agent-Based Simulation**: 120+ agents with individual states (healthy/infected/recovered/vaccinated)
 - **Real-Time Visualization**: Canvas-based rendering at 60 FPS with agent trails
 - **Spatial Optimization**: Grid-based neighbor lookup for O(1) collision detection
@@ -35,7 +35,7 @@ Advanced disease spread simulator with interactive data visualization dashboard.
 - **Export Results**: Download analysis as CSV
 - **Demo Data**: Built-in synthetic epidemic data for testing
 
-### Code Quality 💻
+### Code Quality 
 - **Object-Oriented Design**: Agent & Simulation classes with clear separation
 - **Professional Documentation**: 100+ JSDoc comments, section headers
 - **Optimized Performance**: Spatial grid for fast neighbor queries
@@ -45,7 +45,7 @@ Advanced disease spread simulator with interactive data visualization dashboard.
 
 ---
 
-## 📊 Data Format
+## Data Format
 
 **CSV:**
 ```csv
@@ -65,7 +65,7 @@ t,healthy,infected,recovered,vaccinated
 
 ---
 
-## 💻 Local Development (Optional)
+## Local Development (Optional)
 
 **View simulator locally:**
 ```bash
@@ -82,7 +82,7 @@ Opens interactive dashboard at `http://localhost:8501`
 
 ---
 
-## ✅ Testing Checklist
+## Testing Checklist
 
 - [x] **Simulator**: Agents appear on load, click "Start" to begin
 - [x] **Controls**: All sliders and buttons responsive
@@ -95,7 +95,7 @@ Opens interactive dashboard at `http://localhost:8501`
 
 ---
 
-## 📁 Clean Project Structure
+## Clean Project Structure
 
 ```
 ├── index.html                    # 102 lines - Main simulator UI
@@ -115,26 +115,26 @@ Opens interactive dashboard at `http://localhost:8501`
 
 ---
 
-## 🎯 Highlights
+## Highlights
 
-✅ **Frontend Skills**
+**Frontend Skills**
 - Canvas API for real-time 60 FPS visualization
 - Vanilla JavaScript (no frameworks) - OOP design patterns
 - CSS3 responsive layout with modern glassmorphism
 - Event-driven architecture with proper state management
 
-✅ **Backend Skills**
+ **Backend Skills**
 - Python scientific computing (SciPy, NumPy)
 - Interactive Streamlit dashboards
 - Statistical analysis: curve fitting, R² metrics, epidemiological models
 
-✅ **Engineering Skills**
+**Engineering Skills**
 - Spatial optimization: O(1) neighbor lookup with grid indexing
 - GitHub Actions CI/CD automation
 - Clean code: comprehensive comments, modular architecture
 - Data processing: CSV/JSON parsing and export
 
-✅ **Full-Stack Integration**
+ **Full-Stack Integration**
 - Frontend runs on GitHub Pages
 - Dashboard on Streamlit Cloud
 - Both deploy automatically on git push
@@ -147,6 +147,7 @@ Copyright © 2026 Sameeha. All rights reserved.
 This project is proprietary software. Unauthorized copying, modification, distribution, or use of this code, in whole or in part, for any purpose (commercial or non-commercial) is strictly prohibited without the prior written permission of the author.
 
 For permission requests, please contact: sameeharaza07@gmail.com
+
 
 
 
