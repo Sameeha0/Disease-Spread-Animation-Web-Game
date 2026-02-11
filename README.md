@@ -22,7 +22,7 @@ Advanced disease spread simulator with interactive data visualization dashboard.
 - **Data Import/Export**: Load CSV/JSON, export simulation results
 - **Responsive Design**: Works on desktop and tablet
 
-### Analysis Dashboard (streamlit_app.py) 📊
+### Analysis Dashboard (streamlit_app.py) 
 - **Data Visualization**: Multi-layer interactive Plotly charts
 - **File Upload**: Drag-drop CSV/JSON timeseries data
 - **Curve Fitting**: Logistic sigmoid model with R² goodness-of-fit
@@ -147,6 +147,7 @@ Copyright © 2026 Sameeha. All rights reserved.
 This project is proprietary software. Unauthorized copying, modification, distribution, or use of this code, in whole or in part, for any purpose (commercial or non-commercial) is strictly prohibited without the prior written permission of the author.
 
 For permission requests, please contact: sameeharaza07@gmail.com
+
 
 
 
