@@ -27,6 +27,7 @@
 
   /* Health states (also used by js/simulation.js) */
   --healthy: #76c893;
+  --exposed: #ff9f43;
   --infected: #ff6b6b;
   --recovered: #f6c85f;
   --vaccinated: #8fb3ff;
@@ -576,6 +577,24 @@ input[type="range"]:active::-webkit-slider-thumb {
 .dot.infected { background: var(--infected); }
 .dot.recovered { background: var(--recovered); }
 .dot.vaccinated { background: var(--vaccinated); }
+.dot.exposed { background: var(--exposed); }
+
+/* Symbols for super-spreaders (gold ring) and isolated people (square) */
+.mark {
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+}
+
+.mark.super {
+  border-radius: 50%;
+  border: 2px solid #ffd166;
+}
+
+.mark.quarantined {
+  border-radius: 2px;
+  border: 2px solid var(--infected);
+}
 
 .tooltip {
   position: absolute;
@@ -644,7 +663,7 @@ kbd {
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -699,16 +718,26 @@ kbd {
 .stat[data-state="infected"] { --state-color: var(--infected); }
 .stat[data-state="recovered"] { --state-color: var(--recovered); }
 .stat[data-state="vaccinated"] { --state-color: var(--vaccinated); }
+.stat[data-state="exposed"] { --state-color: var(--exposed); }
 
 /* ============================================================================
    CHART AND ANALYSIS
    ============================================================================ */
 
+.chart-card {
+  display: flex;
+  flex-direction: column;
+}
+
 .chart-wrap {
-  height: 220px;
+  flex: 1;
+  min-height: 220px;
+  position: relative;
 }
 
 #chart {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
@@ -746,6 +775,153 @@ kbd {
 
 .metric.wide {
   grid-column: span 2;
+}
+
+/* ============================================================================
+   SWITCH (quarantine toggle)
+   ============================================================================ */
+
+.switch-row {
+  margin-bottom: 14px;
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.switch-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgba(148, 170, 210, 0.25);
+  transition: background-color 150ms ease;
+}
+
+.switch-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 180ms var(--ease-out);
+}
+
+.switch input:checked + .switch-track {
+  background: var(--accent);
+}
+
+.switch input:checked + .switch-track::after {
+  transform: translateX(16px);
+}
+
+.switch input:focus-visible + .switch-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.field.is-disabled {
+  opacity: 0.4;
+}
+
+/* ============================================================================
+   RUN COMPARISON
+   ============================================================================ */
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.card-actions .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pinned-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pinned-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pinned-legend i {
+  width: 18px;
+  height: 0;
+  border-top: 2px dashed currentColor;
+}
+
+.pinned-legend .current i {
+  border-top-style: solid;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 8px 12px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.compare-table th:first-child,
+.compare-table td:first-child {
+  text-align: left;
+  color: var(--muted);
+}
+
+.compare-table thead th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.compare-table thead th span {
+  display: block;
+  font-weight: 400;
+  color: var(--faint);
+}
+
+.compare-table .best {
+  color: var(--healthy);
+  font-weight: 600;
 }
 
 /* ============================================================================
@@ -804,7 +980,7 @@ kbd {
   }
 
   .stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -831,8 +1007,21 @@ kbd {
     justify-content: center;
   }
 
-  .shortcuts {
+  .shortcuts,
+  .legend-extra {
     display: none;
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .topbar-right {
+    flex-wrap: wrap;
+  }
+
+  .clock {
+    gap: 10px;
   }
 
   .stat b {

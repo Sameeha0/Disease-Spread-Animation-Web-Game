@@ -1,13 +1,15 @@
 /**
  * Disease Spread Simulation Engine
  *
- * Agent-based epidemiological model with spatial optimization.
+ * Agent-based SEIR epidemiological model with spatial optimization.
  * Demonstrates:
  * - Object-oriented design (Agent, Simulation classes)
+ * - SEIR disease stages: healthy (S) -> exposed (E) -> infected (I) -> recovered (R)
+ * - Interventions: quarantine, social distancing, super-spreaders
  * - Spatial grid optimization for O(1) neighbor lookup
  * - Canvas API for real-time, high-DPI visualization
- * - In-browser epidemic analysis (peak, attack rate, doubling time, R0)
- * - Reactive UI with parameter binding and keyboard shortcuts
+ * - In-browser epidemic analysis (peak, attack rate, doubling time, R0, spreading)
+ * - Run comparison and shareable scenario links
  */
 
 (function() {
@@ -16,10 +18,21 @@
   // Colours shared with css/style.css
   const COLORS = {
     healthy: '#76c893',
+    exposed: '#ff9f43',
     infected: '#ff6b6b',
     recovered: '#f6c85f',
     vaccinated: '#8fb3ff'
   };
+
+  const STATES = ['healthy', 'exposed', 'infected', 'recovered', 'vaccinated'];
+
+  // Line colours for saved runs on the chart
+  const PIN_COLORS = ['#e6eef8', '#c084fc', '#22d3ee'];
+  const MAX_PINS = 3;
+
+  // Super-spreaders infect at twice the chance over a larger radius
+  const SUPER_PROB = 2;
+  const SUPER_RADIUS = 1.5;
 
   const STATUS_TEXT = {
     ready: 'Ready',
@@ -48,12 +61,19 @@
   }
 
   /**
-   * Count agents (or one timeseries sample) by state
+   * Count agents by state
    */
   function countStates(agents) {
-    const counts = { healthy: 0, infected: 0, recovered: 0, vaccinated: 0 };
+    const counts = { healthy: 0, exposed: 0, infected: 0, recovered: 0, vaccinated: 0 };
     for (const agent of agents) counts[agent.state]++;
     return counts;
+  }
+
+  /**
+   * Total population in one timeseries sample
+   */
+  function sampleTotal(s) {
+    return s.healthy + (s.exposed || 0) + s.infected + s.recovered + s.vaccinated;
   }
 
   /**
@@ -76,6 +96,13 @@
     return { slope, r2 };
   }
 
+  /**
+   * Escape text before putting it into HTML
+   */
+  function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
   // ============================================================================
   // AGENT CLASS - Represents individual person in simulation
   // ============================================================================
@@ -92,19 +119,45 @@
       this.vy = rand(-1, 1);
       this.trail = [];
 
-      // Disease state: 'healthy', 'infected', 'recovered', 'vaccinated'
+      // Fixed random draws: a person distances / is a super-spreader when their draw
+      // is below the slider value, so the sliders can change live without a reset
+      this.distanceDraw = Math.random();
+      this.superDraw = Math.random();
+
+      // Disease state: 'healthy', 'exposed', 'infected', 'recovered', 'vaccinated'
       this.state = 'healthy';
-      this.infectedTime = 0;
-      this.infectedBy = null;
+      this.stageTime = 0;       // time spent in the current exposed/infected stage
       this.recoveryTime = params.recoveryTime;
+      this.infectedBy = null;
+      this.secondary = 0;       // how many people this person infected
+      this.quarantined = false;
+    }
+
+    /**
+     * True if this person spreads more than others
+     */
+    isSuperSpreader(params) {
+      return this.superDraw < params.superSpreaders / 100;
+    }
+
+    /**
+     * True if this person does not move (distancing or in quarantine)
+     */
+    isStill(params) {
+      return this.quarantined || this.distanceDraw < params.distancing / 100;
     }
 
     /**
      * Update position, bouncing off the edges of the world
      */
-    move(dt, speed, width, height) {
-      this.x += this.vx * dt * 50 * speed;
-      this.y += this.vy * dt * 50 * speed;
+    move(dt, params, width, height) {
+      if (this.isStill(params)) {
+        this.trail = [];
+        return;
+      }
+
+      this.x += this.vx * dt * 50 * params.speed;
+      this.y += this.vy * dt * 50 * params.speed;
 
       if (this.x < 0) { this.x = 0; this.vx *= -1; }
       if (this.y < 0) { this.y = 0; this.vy *= -1; }
@@ -126,25 +179,35 @@
     }
 
     /**
-     * Transition to infected state
+     * Catch the infection: exposed first (if there is an incubation period), then infected
      */
     infect(params, source = null) {
-      if (this.state === 'healthy') {
-        this.state = 'infected';
-        this.infectedTime = 0;
-        this.infectedBy = source;
-        this.recoveryTime = params.recoveryTime;
-      }
+      if (this.state !== 'healthy') return false;
+      this.state = params.incubation > 0 ? 'exposed' : 'infected';
+      this.stageTime = 0;
+      this.infectedBy = source;
+      this.recoveryTime = params.recoveryTime;
+      return true;
     }
 
     /**
-     * Update infection progression
+     * Update disease progression: exposed -> infected -> recovered
      */
-    update(dt) {
-      if (this.state === 'infected') {
-        this.infectedTime += dt;
-        if (this.infectedTime >= this.recoveryTime) {
+    update(dt, params) {
+      if (this.state === 'exposed') {
+        this.stageTime += dt;
+        if (this.stageTime >= params.incubation) {
+          this.state = 'infected';
+          this.stageTime = 0;
+        }
+      } else if (this.state === 'infected') {
+        this.stageTime += dt;
+        if (params.quarantine && !this.quarantined && this.stageTime >= params.quarantineDelay) {
+          this.quarantined = true;
+        }
+        if (this.stageTime >= this.recoveryTime) {
           this.state = 'recovered';
+          this.quarantined = false;
         }
       }
     }
@@ -169,8 +232,13 @@
         speed: 1,
         radius: 14,
         baseProb: 0.45,
+        incubation: 3,
         recoveryTime: 12,
-        vaccinated: 0
+        vaccinated: 0,
+        quarantine: false,
+        quarantineDelay: 2,
+        distancing: 0,
+        superSpreaders: 0
       };
 
       // World size in CSS pixels; the canvas is scaled for high-DPI screens,
@@ -189,6 +257,9 @@
       this.timeseries = [];
       this.peak = { infected: 0, t: 0 };
 
+      // Runs saved for comparison: { label, color, series, metrics }
+      this.pinned = [];
+
       // Spatial grid for O(1) neighbor lookup
       this.grid = { cellSize: 50, cols: 0, rows: 0, cells: [] };
 
@@ -201,7 +272,14 @@
       this.fpsTimer = 0;
 
       this.bindHover();
-      window.addEventListener('resize', () => this.resize());
+      // Redraw whenever the stage or the chart changes size (window resize or layout changes)
+      if (window.ResizeObserver) {
+        const observer = new ResizeObserver(() => this.resize());
+        observer.observe(stage);
+        observer.observe(chartCanvas.parentElement);
+      } else {
+        window.addEventListener('resize', () => this.resize());
+      }
       this.resize();
     }
 
@@ -235,13 +313,14 @@
         this.agents.push(agent);
       }
 
-      // Seed initial infections
+      // Seed initial infections (already infectious, so the outbreak can start)
       let seeded = 0;
       let attempts = 0;
       while (seeded < this.params.initialInfected && attempts < this.agents.length * 5) {
         const agent = this.agents[Math.floor(rand(0, this.agents.length))];
         if (agent.state === 'healthy') {
-          agent.infect(this.params);
+          agent.state = 'infected';
+          agent.stageTime = 0;
           seeded++;
         }
         attempts++;
@@ -290,9 +369,10 @@
 
     /**
      * Rebuild spatial grid - O(n)
+     * Cells are as large as the biggest infection radius (a super-spreader's)
      */
     updateGrid() {
-      const cs = Math.max(24, this.params.radius * 2);
+      const cs = Math.max(24, this.params.radius * SUPER_RADIUS);
       const cols = Math.max(1, Math.ceil(this.width / cs));
       const rows = Math.max(1, Math.ceil(this.height / cs));
       const cells = new Array(cols * rows);
@@ -331,42 +411,53 @@
     }
 
     /**
-     * Simulation step: movement → infection → recovery
+     * Infection radius of one person (larger for super-spreaders)
+     */
+    radiusOf(agent) {
+      return this.params.radius * (agent.isSuperSpreader(this.params) ? SUPER_RADIUS : 1);
+    }
+
+    /**
+     * Simulation step: movement -> infection -> disease progression
      */
     step(dt) {
       const p = this.params;
 
       // Phase 1: Movement
       for (const agent of this.agents) {
-        agent.move(dt, p.speed, this.width, this.height);
+        agent.move(dt, p, this.width, this.height);
       }
       this.updateGrid();
 
-      // Phase 2: Infection spread
+      // Phase 2: Infection spread (only infectious, non-isolated people spread)
       // baseProb is the chance per contact per 1/60 s, converted to this frame's
-      // length so the spread no longer depends on the screen's frame rate
+      // length so the spread does not depend on the screen's frame rate
       const frames = dt * 60;
       for (const agent of this.agents) {
-        if (agent.state !== 'infected') continue;
+        if (agent.state !== 'infected' || agent.quarantined) continue;
+
+        const isSuper = agent.isSuperSpreader(p);
+        const radius = p.radius * (isSuper ? SUPER_RADIUS : 1);
+        const baseProb = Math.min(1, p.baseProb * (isSuper ? SUPER_PROB : 1));
 
         for (const target of this.neighbors(agent)) {
           if (target.state !== 'healthy') continue;
 
           const dist = Math.hypot(agent.x - target.x, agent.y - target.y);
-          if (dist > p.radius) continue;
+          if (dist > radius) continue;
 
           // Probability decreases with distance (linear falloff)
-          const perFrame = p.baseProb * (1 - dist / p.radius);
+          const perFrame = baseProb * (1 - dist / radius);
           const prob = 1 - Math.pow(1 - perFrame, frames);
-          if (Math.random() < prob) {
-            target.infect(p, agent.id);
+          if (Math.random() < prob && target.infect(p, agent.id)) {
+            agent.secondary++;
           }
         }
       }
 
-      // Phase 3: Recovery
+      // Phase 3: Disease progression
       for (const agent of this.agents) {
-        agent.update(dt);
+        agent.update(dt, p);
       }
 
       // Record sample periodically
@@ -401,13 +492,13 @@
       this.time += dt;
       this.step(dt);
 
-      // The outbreak is over when nobody is infected any more
-      if (!this.agents.some(a => a.state === 'infected')) {
+      // The outbreak is over when nobody is exposed or infected any more
+      if (!this.agents.some(a => a.state === 'infected' || a.state === 'exposed')) {
         this.recordSample();
         this.pause();
         this.setStatus('ended');
         this.render();
-        this.onEnd(Simulation.analyze(this.timeseries, this.params.recoveryTime));
+        this.onEnd(this.analyzeCurrent());
         return;
       }
 
@@ -459,6 +550,32 @@
     }
 
     /**
+     * Metrics for the current data (live agents give extra spreading statistics)
+     */
+    analyzeCurrent() {
+      const agents = this.status === 'imported' ? null : this.agents;
+      return Simulation.analyze(this.timeseries, this.params, agents);
+    }
+
+    /**
+     * Save the current run so it stays on the chart for comparison
+     */
+    pin(label) {
+      if (this.timeseries.length < 2) return false;
+      if (this.pinned.length >= MAX_PINS) this.pinned.shift();
+      const used = this.pinned.map(r => r.color);
+      const color = PIN_COLORS.find(c => !used.includes(c)) || PIN_COLORS[0];
+      this.pinned.push({
+        label,
+        color,
+        series: this.timeseries.map(s => ({ ...s })),
+        metrics: this.analyzeCurrent()
+      });
+      this.drawChart();
+      return true;
+    }
+
+    /**
      * Track the mouse so hovering shows details about one person
      */
     bindHover() {
@@ -491,14 +608,15 @@
      */
     render() {
       const ctx = this.ctx;
+      const p = this.params;
       ctx.clearRect(0, 0, this.width, this.height);
 
-      // Infection zones around infected people
+      // Infection zones around people who can currently spread
       ctx.fillStyle = 'rgba(255,107,107,0.06)';
       for (const agent of this.agents) {
-        if (agent.state !== 'infected') continue;
+        if (agent.state !== 'infected' || agent.quarantined) continue;
         ctx.beginPath();
-        ctx.arc(agent.x, agent.y, this.params.radius, 0, Math.PI * 2);
+        ctx.arc(agent.x, agent.y, this.radiusOf(agent), 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -522,6 +640,21 @@
         ctx.fillStyle = COLORS[agent.state];
         ctx.arc(agent.x, agent.y, agent.r, 0, Math.PI * 2);
         ctx.fill();
+
+        // Isolated people: square outline
+        if (agent.quarantined) {
+          ctx.strokeStyle = COLORS.infected;
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(agent.x - 7, agent.y - 7, 14, 14);
+        }
+        // Super-spreaders: gold ring
+        if (agent.isSuperSpreader(p)) {
+          ctx.beginPath();
+          ctx.strokeStyle = '#ffd166';
+          ctx.lineWidth = 1.5;
+          ctx.arc(agent.x, agent.y, agent.r + 2.5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
 
       this.renderHover();
@@ -541,21 +674,26 @@
       }
 
       const ctx = this.ctx;
+      const p = this.params;
       ctx.beginPath();
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 2;
-      ctx.arc(agent.x, agent.y, agent.r + 4, 0, Math.PI * 2);
+      ctx.arc(agent.x, agent.y, agent.r + 5, 0, Math.PI * 2);
       ctx.stroke();
 
-      let detail = '';
-      if (agent.state === 'infected') {
-        const left = Math.max(0, agent.recoveryTime - agent.infectedTime);
-        detail = `<br>Infected for ${agent.infectedTime.toFixed(1)}s, recovers in ${left.toFixed(1)}s`;
-        if (agent.infectedBy !== null) detail += `<br>Caught it from person #${agent.infectedBy}`;
-      } else if (agent.state === 'recovered' && agent.infectedBy !== null) {
-        detail = `<br>Caught it from person #${agent.infectedBy}`;
+      const lines = [`Person #${agent.id}`, `State: <b style="color:${COLORS[agent.state]}">${agent.state}</b>`];
+      if (agent.state === 'exposed') {
+        lines.push(`Infectious in ${Math.max(0, p.incubation - agent.stageTime).toFixed(1)}s`);
       }
-      tooltip.innerHTML = `Person #${agent.id}<br>State: <b style="color:${COLORS[agent.state]}">${agent.state}</b>${detail}`;
+      if (agent.state === 'infected') {
+        lines.push(`Infectious for ${agent.stageTime.toFixed(1)}s, recovers in ${Math.max(0, agent.recoveryTime - agent.stageTime).toFixed(1)}s`);
+        if (agent.quarantined) lines.push('Isolated: cannot infect anyone');
+      }
+      if (agent.infectedBy !== null) lines.push(`Caught it from person #${agent.infectedBy}`);
+      if (agent.secondary > 0) lines.push(`Infected ${agent.secondary} ${agent.secondary === 1 ? 'person' : 'people'}`);
+      if (agent.isSuperSpreader(p)) lines.push('Super-spreader');
+      if (agent.distanceDraw < p.distancing / 100) lines.push('Social distancing');
+      tooltip.innerHTML = lines.join('<br>');
       tooltip.hidden = false;
 
       // Keep the tooltip inside the stage
@@ -576,18 +714,20 @@
       const counts = this.status === 'imported' && this.timeseries.length
         ? this.timeseries[this.timeseries.length - 1]
         : countStates(this.agents);
-      const total = (counts.healthy + counts.infected + counts.recovered + counts.vaccinated) || 1;
+      const total = sampleTotal(counts) || 1;
 
-      for (const state of ['healthy', 'infected', 'recovered', 'vaccinated']) {
-        document.getElementById(state + 'Count').textContent = counts[state];
-        document.getElementById(state + 'Bar').style.transform = `scaleX(${counts[state] / total})`;
+      for (const state of STATES) {
+        const value = counts[state] || 0;
+        document.getElementById(state + 'Count').textContent = value;
+        document.getElementById(state + 'Bar').style.transform = `scaleX(${value / total})`;
       }
+      document.getElementById('quarCount').textContent = this.agents.filter(a => a.quarantined).length;
       document.getElementById('timeLabel').textContent = Math.floor(this.time) + 's';
       document.getElementById('fps').textContent = this.fps;
     }
 
     /**
-     * Draw stacked area chart of all four states over time
+     * Draw stacked area chart of all states, plus saved runs as dashed lines
      */
     drawChart() {
       const ctx = this.chartCtx;
@@ -604,12 +744,13 @@
       const chartW = w - padLeft - padRight;
       const chartH = h - padTop - padBottom;
 
-      const total = Math.max(1, ...series.map(s => s.healthy + s.infected + s.recovered + s.vaccinated));
-      const tMax = len ? Math.max(1, series[len - 1].t) : 1;
+      const allSeries = [series, ...this.pinned.map(r => r.series)];
+      const total = Math.max(1, ...allSeries.flat().map(sampleTotal));
+      const tMax = Math.max(1, ...allSeries.filter(s => s.length).map(s => s[s.length - 1].t));
       const xOf = (t) => padLeft + (t / tMax) * chartW;
       const yOf = (v) => padTop + chartH - (v / total) * chartH;
 
-      // Grid and y-axis labels (share of population)
+      // Grid and y-axis labels
       ctx.font = '500 11px Inter, system-ui, sans-serif';
       ctx.textBaseline = 'middle';
       for (let i = 0; i <= 4; i++) {
@@ -625,34 +766,66 @@
         ctx.fillText(Math.round((total / 4) * i), padLeft - 8, y);
       }
 
-      if (len < 2) {
+      if (len < 2 && !this.pinned.length) {
         ctx.fillStyle = '#64748b';
         ctx.textAlign = 'center';
         ctx.fillText('Press Start to draw the epidemic curve', padLeft + chartW / 2, padTop + chartH / 2);
         return;
       }
 
-      // Stacked areas, from the bottom: infected, recovered, vaccinated, healthy
-      const layers = ['infected', 'recovered', 'vaccinated', 'healthy'];
-      const base = new Array(len).fill(0);
-      for (const layer of layers) {
-        const top = series.map((s, i) => base[i] + s[layer]);
-        ctx.beginPath();
-        ctx.moveTo(xOf(series[0].t), yOf(top[0]));
-        for (let i = 1; i < len; i++) ctx.lineTo(xOf(series[i].t), yOf(top[i]));
-        for (let i = len - 1; i >= 0; i--) ctx.lineTo(xOf(series[i].t), yOf(base[i]));
-        ctx.closePath();
-        ctx.globalAlpha = layer === 'healthy' ? 0.35 : 0.8;
-        ctx.fillStyle = COLORS[layer];
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        for (let i = 0; i < len; i++) base[i] = top[i];
+      // Stacked areas, from the bottom: infected, exposed, recovered, vaccinated, healthy
+      if (len >= 2) {
+        const layers = ['infected', 'exposed', 'recovered', 'vaccinated', 'healthy'];
+        const base = new Array(len).fill(0);
+        for (const layer of layers) {
+          const top = series.map((s, i) => base[i] + (s[layer] || 0));
+          ctx.beginPath();
+          ctx.moveTo(xOf(series[0].t), yOf(top[0]));
+          for (let i = 1; i < len; i++) ctx.lineTo(xOf(series[i].t), yOf(top[i]));
+          for (let i = len - 1; i >= 0; i--) ctx.lineTo(xOf(series[i].t), yOf(base[i]));
+          ctx.closePath();
+          ctx.globalAlpha = layer === 'healthy' ? 0.3 : 0.8;
+          ctx.fillStyle = COLORS[layer];
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          for (let i = 0; i < len; i++) base[i] = top[i];
+        }
       }
 
-      // Peak marker on the infected curve
-      if (this.peak.infected > 0 && this.status !== 'imported') {
+      // Saved runs: active cases (exposed + infected) as dashed lines
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      for (const run of this.pinned) {
+        ctx.strokeStyle = run.color;
+        ctx.beginPath();
+        run.series.forEach((s, i) => {
+          const x = xOf(s.t);
+          const y = yOf(s.infected + (s.exposed || 0));
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
+      // Current run's active cases as a solid line on top, so it can be compared
+      if (this.pinned.length && len >= 2) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.beginPath();
+        series.forEach((s, i) => {
+          const x = xOf(s.t);
+          const y = yOf(s.infected + (s.exposed || 0));
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+      // Peak marker
+      if (this.peak.infected > 0 && this.status !== 'imported' && len >= 2) {
         const x = xOf(this.peak.t);
         ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 1;
         ctx.strokeStyle = 'rgba(255,255,255,0.5)';
         ctx.beginPath();
         ctx.moveTo(x, padTop);
@@ -664,11 +837,10 @@
         ctx.fillText(`Peak ${this.peak.infected}`, x + (ctx.textAlign === 'left' ? 6 : -6), padTop + 10);
       }
 
-      // Time axis: 5 evenly spaced, distinct labels
+      // Time axis: 5 evenly spaced labels; the edge labels align inward so they are never cut off
       ctx.fillStyle = '#64748b';
       for (let i = 0; i <= 4; i++) {
         const t = (tMax / 4) * i;
-        // first and last labels align to the edges so they are never cut off
         ctx.textAlign = i === 0 ? 'left' : i === 4 ? 'right' : 'center';
         ctx.fillText(Math.round(t) + 's', xOf(t), padTop + chartH + 14);
       }
@@ -678,41 +850,66 @@
      * Epidemic metrics from a timeseries (works for live and imported data)
      *
      * - Attack rate: share of people who could catch it (not vaccinated) who did
-     * - Doubling time and growth rate: log-linear fit to the early growth phase
-     * - R0 estimate: 1 + r × D (SIR approximation, D = recovery time)
+     * - Growth rate r and doubling time: log-linear fit to early growth of active cases
+     * - R0 estimate for SEIR: (1 + r*D)(1 + r*L), D = infectious period, L = incubation
+     *   (with no incubation this is the SIR formula 1 + r*D)
+     * - With live agents: observed average spread and the share caused by the top 20%
      */
-    static analyze(series, recoveryTime) {
+    static analyze(series, params, agents = null) {
       if (!series || series.length < 2) return null;
 
       const first = series[0];
       const last = series[series.length - 1];
-      const population = first.healthy + first.infected + first.recovered + first.vaccinated;
+      const population = sampleTotal(first);
       const susceptible = Math.max(1, population - first.vaccinated);
+      const active = (s) => s.infected + (s.exposed || 0);
 
       let peak = first;
       for (const s of series) if (s.infected > peak.infected) peak = s;
+      let activePeak = 0;
+      for (const s of series) activePeak = Math.max(activePeak, active(s));
 
-      const everInfected = last.infected + last.recovered;
-      const ongoing = last.infected > 0;
+      const everInfected = active(last) + last.recovered;
+      const ongoing = active(last) > 0;
 
-      // Early growth: from the start until infections first reach half the peak
+      // Early growth: from the start until active cases first reach half their peak
       const growth = [];
       for (const s of series) {
-        if (s.infected > 0) growth.push(s);
-        if (s.infected >= peak.infected / 2) break;
+        if (active(s) > 0) growth.push(s);
+        if (active(s) >= activePeak / 2) break;
       }
 
       let growthRate = null;
       let fitR2 = null;
       if (growth.length >= 3) {
-        const fit = linearFit(growth.map(s => s.t), growth.map(s => Math.log(s.infected)));
+        const fit = linearFit(growth.map(s => s.t), growth.map(s => Math.log(active(s))));
         if (fit.slope > 0) {
           growthRate = fit.slope;
           fitR2 = fit.r2;
         }
       }
 
-      const r0 = growthRate !== null && recoveryTime ? 1 + growthRate * recoveryTime : null;
+      const D = params.recoveryTime;
+      const L = params.incubation || 0;
+      const r0 = growthRate !== null && D ? (1 + growthRate * D) * (1 + growthRate * L) : null;
+
+      // Who did the spreading (only possible with live agents)
+      let observedR = null;
+      let topShare = null;
+      if (agents) {
+        const finished = agents.filter(a => a.state === 'recovered' && a.infectedBy !== null);
+        if (finished.length) {
+          observedR = finished.reduce((sum, a) => sum + a.secondary, 0) / finished.length;
+        }
+        const spreaders = agents.filter(a => a.state === 'recovered' || a.state === 'infected' || a.state === 'exposed')
+          .map(a => a.secondary)
+          .sort((a, b) => b - a);
+        const totalSecondary = spreaders.reduce((a, b) => a + b, 0);
+        if (totalSecondary > 0) {
+          const top = spreaders.slice(0, Math.max(1, Math.ceil(spreaders.length * 0.2)));
+          topShare = top.reduce((a, b) => a + b, 0) / totalSecondary;
+        }
+      }
 
       return {
         population,
@@ -727,7 +924,9 @@
         growthRate,
         fitR2,
         r0,
-        herdImmunity: r0 && r0 > 1 ? 1 - 1 / r0 : null
+        herdImmunity: r0 && r0 > 1 ? 1 - 1 / r0 : null,
+        observedR,
+        topShare
       };
     }
   }
@@ -743,26 +942,29 @@
       document.getElementById('stage')
     );
 
+    // Slider id -> label id, URL key, and how to turn the slider value into a parameter
+    const SLIDERS = {
+      population: { label: 'popVal', key: 'pop', param: 'population', reset: true },
+      initialInfected: { label: 'initVal', key: 'init', param: 'initialInfected', reset: true },
+      vaccinated: { label: 'vacVal', key: 'vac', param: 'vaccinated', reset: true },
+      prob: { label: 'probVal', key: 'prob', param: 'baseProb', scale: 0.01 },
+      radius: { label: 'radiusVal', key: 'radius', param: 'radius' },
+      incubation: { label: 'incVal', key: 'inc', param: 'incubation' },
+      recovery: { label: 'recVal', key: 'rec', param: 'recoveryTime' },
+      speed: { label: 'speedVal', key: 'speed', param: 'speed', decimals: 1 },
+      quarDelay: { label: 'quarVal', key: 'qd', param: 'quarantineDelay', decimals: 1 },
+      distancing: { label: 'distVal', key: 'dist', param: 'distancing' },
+      superSpreaders: { label: 'ssVal', key: 'ss', param: 'superSpreaders' }
+    };
+
+    const el = (id) => document.getElementById(id);
+    const quarantine = el('quarantine');
     const ui = {
-      population: document.getElementById('population'),
-      popVal: document.getElementById('popVal'),
-      initialInfected: document.getElementById('initialInfected'),
-      initVal: document.getElementById('initVal'),
-      speed: document.getElementById('speed'),
-      speedVal: document.getElementById('speedVal'),
-      radius: document.getElementById('radius'),
-      radiusVal: document.getElementById('radiusVal'),
-      prob: document.getElementById('prob'),
-      probVal: document.getElementById('probVal'),
-      recovery: document.getElementById('recovery'),
-      recVal: document.getElementById('recVal'),
-      vaccinated: document.getElementById('vaccinated'),
-      vacVal: document.getElementById('vacVal'),
-      start: document.getElementById('start'),
-      pause: document.getElementById('pause'),
-      status: document.getElementById('statusPill'),
-      endBanner: document.getElementById('endBanner'),
-      chartSource: document.getElementById('chartSource')
+      start: el('start'),
+      pause: el('pause'),
+      status: el('statusPill'),
+      endBanner: el('endBanner'),
+      chartSource: el('chartSource')
     };
 
     // ========================================================================
@@ -771,12 +973,12 @@
 
     let noticeTimer = null;
     function notify(text, type = 'info') {
-      const el = document.getElementById('notice');
-      el.textContent = text;
-      el.dataset.type = type;
-      el.hidden = false;
+      const box = el('notice');
+      box.textContent = text;
+      box.dataset.type = type;
+      box.hidden = false;
       clearTimeout(noticeTimer);
-      noticeTimer = setTimeout(() => { el.hidden = true; }, 3200);
+      noticeTimer = setTimeout(() => { box.hidden = true; }, 3200);
     }
 
     // ========================================================================
@@ -789,13 +991,15 @@
       ui.start.disabled = status === 'running';
       ui.pause.disabled = status !== 'running';
       if (status === 'running' || status === 'ready') ui.endBanner.hidden = true;
-      ui.chartSource.textContent = status === 'imported' ? ui.chartSource.textContent : 'Live simulation';
+      if (status !== 'imported') ui.chartSource.textContent = 'Live simulation';
     };
 
     sim.onEnd = (a) => {
-      ui.endBanner.innerHTML = `<strong>Outbreak over after ${Math.round(a.duration)}s.</strong> ` +
+      let text = `<strong>Outbreak over after ${Math.round(a.duration)}s.</strong> ` +
         `Peak of ${a.peakInfected} infected at ${Math.round(a.peakTime)}s; ` +
         `${Math.round(a.attackRate * 100)}% of people who could catch it did.`;
+      if (a.topShare !== null) text += ` The top 20% of spreaders caused ${Math.round(a.topShare * 100)}% of infections.`;
+      ui.endBanner.innerHTML = text;
       ui.endBanner.hidden = false;
       showAnalysis(a);
     };
@@ -813,29 +1017,24 @@
     }
 
     function syncLabels() {
-      ui.popVal.textContent = ui.population.value;
-      ui.initVal.textContent = ui.initialInfected.value;
-      ui.speedVal.textContent = Number(ui.speed.value).toFixed(1);
-      ui.radiusVal.textContent = ui.radius.value;
-      ui.probVal.textContent = ui.prob.value;
-      ui.recVal.textContent = ui.recovery.value;
-      ui.vacVal.textContent = ui.vaccinated.value;
-      document.querySelectorAll('input[type="range"]').forEach(paintSlider);
+      for (const [id, cfg] of Object.entries(SLIDERS)) {
+        const value = Number(el(id).value);
+        el(cfg.label).textContent = cfg.decimals ? value.toFixed(cfg.decimals) : value;
+        paintSlider(el(id));
+      }
+      el('quarDelayField').classList.toggle('is-disabled', !quarantine.checked);
+      el('quarDelay').disabled = !quarantine.checked;
     }
 
     /**
      * Apply UI parameters to simulation
      */
     function applyParams() {
-      Object.assign(sim.params, {
-        population: Number(ui.population.value),
-        initialInfected: Number(ui.initialInfected.value),
-        speed: Number(ui.speed.value),
-        radius: Number(ui.radius.value),
-        baseProb: Number(ui.prob.value) / 100,
-        recoveryTime: Number(ui.recovery.value),
-        vaccinated: Number(ui.vaccinated.value)
-      });
+      for (const [id, cfg] of Object.entries(SLIDERS)) {
+        sim.params[cfg.param] = Number(el(id).value) * (cfg.scale || 1);
+      }
+      sim.params.quarantine = quarantine.checked;
+      updateUrl();
     }
 
     function resetSim() {
@@ -848,44 +1047,112 @@
       document.querySelectorAll('.preset').forEach(b => { b.dataset.active = 'false'; });
     }
 
-    // Population settings rebuild the population straight away unless a run is in progress
-    for (const key of ['population', 'initialInfected', 'vaccinated']) {
-      ui[key].addEventListener('input', () => {
+    for (const [id, cfg] of Object.entries(SLIDERS)) {
+      el(id).addEventListener('input', () => {
         syncLabels();
         clearPresetHighlight();
-        if (sim.status !== 'running') resetSim();
+        // Population settings rebuild the population straight away unless a run is in progress
+        if (cfg.reset && sim.status !== 'running') {
+          resetSim();
+        } else {
+          applyParams();
+          if (!sim.running) sim.render();
+        }
       });
     }
 
-    // Transmission settings change live
-    for (const key of ['speed', 'radius', 'prob', 'recovery']) {
-      ui[key].addEventListener('input', () => {
-        syncLabels();
-        clearPresetHighlight();
-        applyParams();
-        if (!sim.running) sim.render();
-      });
+    quarantine.addEventListener('change', () => {
+      syncLabels();
+      clearPresetHighlight();
+      applyParams();
+      if (!sim.running) sim.render();
+    });
+
+    // ========================================================================
+    // SHAREABLE LINKS (every setting lives in the page address)
+    // ========================================================================
+
+    function currentQuery() {
+      const q = new URLSearchParams();
+      for (const [id, cfg] of Object.entries(SLIDERS)) q.set(cfg.key, el(id).value);
+      q.set('q', quarantine.checked ? '1' : '0');
+      return q.toString();
     }
+
+    function updateUrl() {
+      const url = location.pathname + '?' + currentQuery();
+      if (url !== location.pathname + location.search) history.replaceState(null, '', url);
+    }
+
+    /**
+     * Read settings from the address bar; returns true if any were found
+     */
+    function loadFromUrl() {
+      const q = new URLSearchParams(location.search);
+      let found = false;
+      for (const [id, cfg] of Object.entries(SLIDERS)) {
+        if (!q.has(cfg.key)) continue;
+        const slider = el(id);
+        const value = Number(q.get(cfg.key));
+        if (Number.isFinite(value)) {
+          slider.value = clamp(value, Number(slider.min), Number(slider.max));
+          found = true;
+        }
+      }
+      if (q.has('q')) {
+        quarantine.checked = q.get('q') === '1';
+        found = true;
+      }
+      return found;
+    }
+
+    el('copyLink').addEventListener('click', async () => {
+      updateUrl();
+      try {
+        await navigator.clipboard.writeText(location.href);
+        notify('Link copied. Anyone who opens it gets this exact scenario.');
+      } catch (err) {
+        notify('Could not copy automatically. Copy the address from your browser bar.', 'error');
+      }
+    });
 
     // ========================================================================
     // PRESET SCENARIOS (each sets every parameter, so they never mix)
     // ========================================================================
 
+    const BASE = {
+      population: 120, initialInfected: 3, vaccinated: 0, prob: 45, radius: 14, incubation: 3,
+      recovery: 12, speed: 1, quarantine: false, quarDelay: 2, distancing: 0, superSpreaders: 0
+    };
     const PRESETS = {
-      presetBase: { population: 120, initialInfected: 3, speed: 1, radius: 14, prob: 45, recovery: 12, vaccinated: 0 },
-      presetFast: { population: 200, initialInfected: 3, speed: 1.4, radius: 18, prob: 70, recovery: 12, vaccinated: 0 },
-      presetVacc: { population: 120, initialInfected: 3, speed: 1, radius: 14, prob: 20, recovery: 12, vaccinated: 60 },
-      presetLow: { population: 120, initialInfected: 3, speed: 0.6, radius: 8, prob: 10, recovery: 12, vaccinated: 0 }
+      presetBase: { ...BASE },
+      presetFast: { ...BASE, population: 200, prob: 70, radius: 18, speed: 1.4 },
+      presetVacc: { ...BASE, vaccinated: 60, prob: 20 },
+      presetLow: { ...BASE, distancing: 60 },
+      presetQuar: { ...BASE, quarantine: true, quarDelay: 2 },
+      presetSuper: { ...BASE, prob: 25, superSpreaders: 10 }
+    };
+    const PRESET_NAMES = {
+      presetBase: 'Baseline', presetFast: 'Fast spread', presetVacc: 'Vaccinated',
+      presetLow: 'Distancing', presetQuar: 'Quarantine', presetSuper: 'Super-spreaders'
     };
 
     for (const [id, values] of Object.entries(PRESETS)) {
-      document.getElementById(id).addEventListener('click', (e) => {
-        for (const [key, value] of Object.entries(values)) ui[key].value = value;
+      el(id).addEventListener('click', (e) => {
+        for (const [key, value] of Object.entries(values)) {
+          if (key === 'quarantine') quarantine.checked = value;
+          else el(key).value = value;
+        }
         syncLabels();
         clearPresetHighlight();
         e.currentTarget.dataset.active = 'true';
         resetSim();
       });
+    }
+
+    function scenarioName() {
+      const active = document.querySelector('.preset[data-active="true"]');
+      return active ? PRESET_NAMES[active.id] : 'Custom';
     }
 
     // ========================================================================
@@ -901,7 +1168,7 @@
 
     ui.start.addEventListener('click', startSim);
     ui.pause.addEventListener('click', () => sim.pause());
-    document.getElementById('reset').addEventListener('click', resetSim);
+    el('reset').addEventListener('click', resetSim);
 
     document.addEventListener('keydown', (e) => {
       const tag = e.target.tagName;
@@ -915,17 +1182,96 @@
     });
 
     // ========================================================================
+    // RUN COMPARISON
+    // ========================================================================
+
+    function renderPinnedLegend() {
+      const legend = el('pinnedLegend');
+      if (!sim.pinned.length) {
+        legend.hidden = true;
+        return;
+      }
+      legend.innerHTML = '<span class="current" style="color:#ffffff"><i></i>Current run (active cases)</span>' +
+        sim.pinned.map(r => `<span style="color:${r.color}"><i></i>${escapeHtml(r.label)}</span>`).join('');
+      legend.hidden = false;
+    }
+
+    function fmt(value, kind) {
+      if (value === null || value === undefined) return '—';
+      if (kind === 'pct') return Math.round(value * 100) + '%';
+      if (kind === 's') return value.toFixed(value < 10 ? 1 : 0) + 's';
+      if (kind === 'n') return value.toFixed(2);
+      return String(Math.round(value));
+    }
+
+    function renderComparison() {
+      const card = el('compareCard');
+      if (!sim.pinned.length) {
+        card.hidden = true;
+        return;
+      }
+
+      const current = sim.analyzeCurrent();
+      const columns = sim.pinned.map(r => ({ label: r.label, color: r.color, sub: 'saved', m: r.metrics }));
+      if (current) columns.push({ label: 'Current run', color: '#ffffff', sub: STATUS_TEXT[sim.status].toLowerCase(), m: current });
+
+      // [label, metric key, format, which direction is better]
+      const rows = [
+        ['Peak infected', 'peakInfected', 'count', 'low'],
+        ['Peak time', 'peakTime', 's', null],
+        ['Attack rate', 'attackRate', 'pct', 'low'],
+        ['Doubling time', 'doublingTime', 's', 'high'],
+        ['Estimated R₀', 'r0', 'n', 'low'],
+        ['Avg. people infected per case', 'observedR', 'n', 'low'],
+        ['Duration', 'duration', 's', null]
+      ];
+
+      let html = '<thead><tr><th>Metric</th>' +
+        columns.map(c => `<th style="color:${c.color}">${escapeHtml(c.label)}<span>${escapeHtml(c.sub)}</span></th>`).join('') +
+        '</tr></thead><tbody>';
+      for (const [name, key, kind, better] of rows) {
+        const values = columns.map(c => (c.m ? c.m[key] : null));
+        const valid = values.filter(v => v !== null && v !== undefined);
+        const best = better && valid.length > 1 ? (better === 'low' ? Math.min(...valid) : Math.max(...valid)) : null;
+        html += `<tr><td>${name}</td>` +
+          values.map(v => `<td class="${best !== null && v === best ? 'best' : ''}">${fmt(v, kind)}</td>`).join('') +
+          '</tr>';
+      }
+      el('compareTable').innerHTML = html + '</tbody>';
+      card.hidden = false;
+    }
+
+    el('pinRun').addEventListener('click', () => {
+      if (sim.status === 'running') sim.pause();
+      const label = `Run ${sim.pinned.length + 1}: ${scenarioName()}`;
+      if (!sim.pin(label)) {
+        notify('Run the simulation first, then save it for comparison.', 'error');
+        return;
+      }
+      renderPinnedLegend();
+      renderComparison();
+      notify(`Saved "${label}". Change a setting and run again to compare.`);
+    });
+
+    el('clearPins').addEventListener('click', () => {
+      sim.pinned = [];
+      sim.drawChart();
+      renderPinnedLegend();
+      renderComparison();
+    });
+
+    // ========================================================================
     // FILE IMPORT - CSV/JSON
     // ========================================================================
 
-    const fileEl = document.getElementById('importFile');
+    const fileEl = el('importFile');
     fileEl.addEventListener('change', () => {
-      document.getElementById('importLabel').textContent = fileEl.files.length
+      el('importLabel').textContent = fileEl.files.length
         ? fileEl.files[0].name
         : 'Choose a CSV or JSON file to import';
     });
 
-    document.getElementById('importBtn').addEventListener('click', async () => {
+    el('importBtn').addEventListener('click', async () => {
       if (!fileEl.files.length) {
         notify('Choose a file first', 'error');
         return;
@@ -954,9 +1300,11 @@
           throw new Error('File must be .csv or .json');
         }
 
+        // "exposed" is optional so older SIR files still load
         const series = data.map(s => ({
           t: Number(s.t) || 0,
           healthy: Number(s.healthy) || 0,
+          exposed: Number(s.exposed) || 0,
           infected: Number(s.infected) || 0,
           recovered: Number(s.recovered) || 0,
           vaccinated: Number(s.vaccinated) || 0
@@ -968,7 +1316,7 @@
         hideAnalysis();
         notify(`Loaded ${series.length} records from ${file.name}`);
         fileEl.value = '';
-        document.getElementById('importLabel').textContent = 'Choose a CSV or JSON file to import';
+        el('importLabel').textContent = 'Choose a CSV or JSON file to import';
       } catch (err) {
         notify('Import failed: ' + err.message, 'error');
       }
@@ -983,27 +1331,35 @@
     }
 
     function showAnalysis(a) {
-      const el = document.getElementById('analysisResults');
       const pct = (x) => (x * 100).toFixed(0) + '%';
-      el.innerHTML =
+      let html =
         metric('Peak infected', a.peakInfected, `${pct(a.peakShare)} of people, at ${a.peakTime.toFixed(0)}s`) +
         metric('Attack rate', pct(a.attackRate), `${a.everInfected} people infected`) +
         metric('Doubling time', a.doublingTime ? a.doublingTime.toFixed(1) + 's' : '—',
           a.fitR2 !== null ? `early growth fit R² = ${a.fitR2.toFixed(2)}` : 'not enough early growth') +
         metric('Estimated R₀', a.r0 ? a.r0.toFixed(2) : '—',
-          a.herdImmunity ? `herd immunity at about ${pct(a.herdImmunity)}` : 'needs a growing outbreak') +
-        metric('Duration', a.duration.toFixed(0) + 's', a.ongoing ? 'outbreak still going' : 'until the last recovery', true);
-      el.hidden = false;
-      document.getElementById('analysisEmpty').hidden = true;
+          a.herdImmunity ? `herd immunity at about ${pct(a.herdImmunity)}` : 'needs a growing outbreak');
+      if (a.observedR !== null || a.topShare !== null) {
+        html +=
+          metric('Avg. infected per case', a.observedR !== null ? a.observedR.toFixed(2) : '—', 'counted from finished cases') +
+          metric('Top 20% of spreaders', a.topShare !== null ? pct(a.topShare) : '—', 'share of all infections they caused');
+      }
+      html += metric('Duration', a.duration.toFixed(0) + 's', a.ongoing ? 'outbreak still going' : 'until the last recovery', true);
+
+      el('analysisResults').innerHTML = html;
+      el('analysisResults').hidden = false;
+      el('analysisEmpty').hidden = true;
+      renderComparison();
     }
 
     function hideAnalysis() {
-      document.getElementById('analysisResults').hidden = true;
-      document.getElementById('analysisEmpty').hidden = false;
+      el('analysisResults').hidden = true;
+      el('analysisEmpty').hidden = false;
+      renderComparison();
     }
 
-    document.getElementById('analyzeBtn').addEventListener('click', () => {
-      const a = Simulation.analyze(sim.timeseries, sim.params.recoveryTime);
+    el('analyzeBtn').addEventListener('click', () => {
+      const a = sim.analyzeCurrent();
       if (!a) {
         notify('No data yet. Run the simulation or import a file first.', 'error');
         return;
@@ -1035,22 +1391,24 @@
       return true;
     }
 
-    document.getElementById('exportJSON').addEventListener('click', () => {
+    el('exportJSON').addEventListener('click', () => {
       if (!hasData()) return;
       download('simulation.json', JSON.stringify(sim.timeseries, null, 2), 'application/json');
     });
 
-    document.getElementById('exportCSV').addEventListener('click', () => {
+    el('exportCSV').addEventListener('click', () => {
       if (!hasData()) return;
-      const keys = ['t', 'healthy', 'infected', 'recovered', 'vaccinated'];
+      const keys = ['t', ...STATES];
       const csv = [keys.join(',')]
         .concat(sim.timeseries.map(s => keys.map(k => s[k] || 0).join(',')))
         .join('\n');
       download('simulation.csv', csv, 'text/csv');
     });
 
-    // First draw
+    // First draw: a shared link restores its scenario
+    if (loadFromUrl()) clearPresetHighlight();
     syncLabels();
+    applyParams();
     sim.init(sim.params);
   });
 })();

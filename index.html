@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Disease Spread Simulator</title>
-  <meta name="description" content="Agent-based disease spread simulator with live epidemic curves and in-browser analysis." />
+  <meta name="description" content="Agent-based SEIR disease spread simulator with interventions, run comparison, shareable scenarios and in-browser analysis." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect width='20' height='20' rx='5' fill='%233b82f6'/%3E%3Ccircle cx='10' cy='10' r='4' fill='%23ff6b6b'/%3E%3Ccircle cx='10' cy='10' r='6.5' fill='none' stroke='%23ff6b6b' stroke-opacity='.45'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -17,11 +17,15 @@
       <span class="brand-mark" aria-hidden="true"><span></span></span>
       <div>
         <h1>Disease Spread Simulator</h1>
-        <p>Agent-based model of how an infection moves through a population</p>
+        <p>Agent-based SEIR model of how an infection moves through a population</p>
       </div>
     </div>
     <div class="topbar-right">
       <span id="statusPill" class="status-pill" data-status="ready">Ready</span>
+      <button id="copyLink" class="btn btn-small" title="Copy a link that opens this exact scenario">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 9.5a3 3 0 0 0 4.2 0l2.3-2.3a3 3 0 0 0-4.2-4.2l-.8.8M9.5 6.5a3 3 0 0 0-4.2 0L3 8.8A3 3 0 0 0 7.2 13l.8-.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        Copy link
+      </button>
       <a class="link" href="https://disease-spread-animation-web-game-tccqs9bdlxcy6uykdsx4mh.streamlit.app/" target="_blank" rel="noopener">Analysis dashboard ↗</a>
     </div>
   </header>
@@ -33,7 +37,7 @@
         <h2 class="card-title">Scenario</h2>
         <div class="presets">
           <button class="preset" id="presetBase" data-active="true">
-            <span class="preset-name">Baseline</span><span class="preset-desc">Default settings</span>
+            <span class="preset-name">Baseline</span><span class="preset-desc">No interventions</span>
           </button>
           <button class="preset" id="presetFast">
             <span class="preset-name">Fast spread</span><span class="preset-desc">Crowded, contagious</span>
@@ -42,7 +46,13 @@
             <span class="preset-name">Vaccinated</span><span class="preset-desc">60% immune</span>
           </button>
           <button class="preset" id="presetLow">
-            <span class="preset-name">Low spread</span><span class="preset-desc">Distancing</span>
+            <span class="preset-name">Distancing</span><span class="preset-desc">60% stay still</span>
+          </button>
+          <button class="preset" id="presetQuar">
+            <span class="preset-name">Quarantine</span><span class="preset-desc">Isolate after 2 s</span>
+          </button>
+          <button class="preset" id="presetSuper">
+            <span class="preset-name">Super-spreaders</span><span class="preset-desc">10% spread more</span>
           </button>
         </div>
       </section>
@@ -61,28 +71,56 @@
           <label for="vaccinated">Vaccinated <output><span id="vacVal">0</span>%</output></label>
           <input id="vaccinated" type="range" min="0" max="100" value="0">
         </div>
-        <p class="hint" id="popHint">Changing these builds a fresh population (or on Reset while running).</p>
+        <p class="hint">Changing these builds a fresh population (or on Reset while running).</p>
       </section>
 
       <section class="card">
-        <h2 class="card-title">Transmission</h2>
+        <h2 class="card-title">Disease</h2>
         <div class="field">
-          <label for="speed">Movement speed <output id="speedVal">1.0</output></label>
-          <input id="speed" type="range" min="0" max="3" step="0.1" value="1">
+          <label for="prob">Infection chance <output><span id="probVal">45</span>%</output></label>
+          <input id="prob" type="range" min="0" max="100" value="45">
         </div>
         <div class="field">
           <label for="radius">Infection radius <output><span id="radiusVal">14</span> px</output></label>
           <input id="radius" type="range" min="6" max="60" value="14">
         </div>
         <div class="field">
-          <label for="prob">Infection chance <output><span id="probVal">45</span>%</output></label>
-          <input id="prob" type="range" min="0" max="100" value="45">
+          <label for="incubation">Incubation (exposed) <output><span id="incVal">3</span> s</output></label>
+          <input id="incubation" type="range" min="0" max="20" value="3">
         </div>
         <div class="field">
-          <label for="recovery">Recovery time <output><span id="recVal">12</span> s</output></label>
+          <label for="recovery">Infectious period <output><span id="recVal">12</span> s</output></label>
           <input id="recovery" type="range" min="2" max="60" value="12">
         </div>
-        <p class="hint">Transmission settings change live, even while running.</p>
+        <div class="field">
+          <label for="speed">Movement speed <output id="speedVal">1.0</output></label>
+          <input id="speed" type="range" min="0" max="3" step="0.1" value="1">
+        </div>
+        <p class="hint">Exposed people carry the infection but cannot spread it until the incubation period ends. Set it to 0 for a plain SIR model.</p>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Interventions</h2>
+        <div class="switch-row">
+          <label class="switch" for="quarantine">
+            <input id="quarantine" type="checkbox" role="switch">
+            <span class="switch-track" aria-hidden="true"></span>
+            <span>Quarantine infected people</span>
+          </label>
+        </div>
+        <div class="field" id="quarDelayField">
+          <label for="quarDelay">Isolate after <output><span id="quarVal">2</span> s</output></label>
+          <input id="quarDelay" type="range" min="0" max="10" step="0.5" value="2">
+        </div>
+        <div class="field">
+          <label for="distancing">Social distancing <output><span id="distVal">0</span>%</output></label>
+          <input id="distancing" type="range" min="0" max="90" value="0">
+        </div>
+        <div class="field">
+          <label for="superSpreaders">Super-spreaders <output><span id="ssVal">0</span>%</output></label>
+          <input id="superSpreaders" type="range" min="0" max="30" value="0">
+        </div>
+        <p class="hint">All interventions change live. Distancing people stay still; super-spreaders infect at twice the chance over 1.5&times; the radius.</p>
       </section>
 
       <section class="card">
@@ -119,6 +157,7 @@
           </div>
           <div class="clock">
             <span>Time <b id="timeLabel">0s</b></span>
+            <span>Isolated <b id="quarCount">0</b></span>
             <span>FPS <b id="fps">0</b></span>
           </div>
         </div>
@@ -127,9 +166,12 @@
           <canvas id="simCanvas" aria-label="Simulation of moving people; colours show health state"></canvas>
           <div class="legend" aria-hidden="true">
             <span><i class="dot healthy"></i>Healthy</span>
+            <span><i class="dot exposed"></i>Exposed</span>
             <span><i class="dot infected"></i>Infected</span>
             <span><i class="dot recovered"></i>Recovered</span>
             <span><i class="dot vaccinated"></i>Vaccinated</span>
+            <span class="legend-extra"><i class="mark super"></i>Super-spreader</span>
+            <span class="legend-extra"><i class="mark quarantined"></i>Isolated</span>
           </div>
           <div id="tooltip" class="tooltip" hidden></div>
           <div id="endBanner" class="end-banner" hidden></div>
@@ -139,6 +181,7 @@
 
       <section class="stats" aria-label="Population counts">
         <div class="stat card" data-state="healthy"><span class="stat-label">Healthy</span><b id="healthyCount">0</b><span class="stat-share"><i id="healthyBar"></i></span></div>
+        <div class="stat card" data-state="exposed"><span class="stat-label">Exposed</span><b id="exposedCount">0</b><span class="stat-share"><i id="exposedBar"></i></span></div>
         <div class="stat card" data-state="infected"><span class="stat-label">Infected</span><b id="infectedCount">0</b><span class="stat-share"><i id="infectedBar"></i></span></div>
         <div class="stat card" data-state="recovered"><span class="stat-label">Recovered</span><b id="recoveredCount">0</b><span class="stat-share"><i id="recoveredBar"></i></span></div>
         <div class="stat card" data-state="vaccinated"><span class="stat-label">Vaccinated</span><b id="vaccinatedCount">0</b><span class="stat-share"><i id="vaccinatedBar"></i></span></div>
@@ -148,9 +191,13 @@
         <section class="card chart-card">
           <div class="card-head">
             <h2 class="card-title">Epidemic curve</h2>
-            <span class="muted" id="chartSource">Live simulation</span>
+            <div class="card-actions">
+              <span class="muted" id="chartSource">Live simulation</span>
+              <button id="pinRun" class="btn btn-small" title="Keep this run on the chart to compare with the next one">Save for comparison</button>
+            </div>
           </div>
           <div class="chart-wrap"><canvas id="chart" aria-label="Stacked area chart of population states over time"></canvas></div>
+          <div id="pinnedLegend" class="pinned-legend" hidden></div>
         </section>
 
         <section class="card analysis-card">
@@ -159,9 +206,19 @@
             <button id="analyzeBtn" class="btn btn-small">Analyze</button>
           </div>
           <div id="analysisResults" class="metrics" hidden></div>
-          <p id="analysisEmpty" class="muted">Run the simulation (or import data), then press Analyze to see the peak, attack rate, doubling time and an estimated R<sub>0</sub>.</p>
+          <p id="analysisEmpty" class="muted">Run the simulation (or import data), then press Analyze to see the peak, attack rate, doubling time, R<sub>0</sub> and who did the spreading.</p>
         </section>
       </div>
+
+      <section id="compareCard" class="card compare-card" hidden>
+        <div class="card-head">
+          <h2 class="card-title">Run comparison</h2>
+          <button id="clearPins" class="btn btn-small">Clear saved runs</button>
+        </div>
+        <div class="table-scroll">
+          <table id="compareTable" class="compare-table"></table>
+        </div>
+      </section>
     </main>
   </div>
 
