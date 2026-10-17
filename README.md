@@ -1,6 +1,6 @@
 # 🦠 Disease Spread Simulator & Analysis Dashboard
 
-Advanced disease spread simulator with interactive data visualization dashboard. showcasing **agent-based modeling**, **real-time visualization**, and **data science** capabilities.
+Agent-based disease spread simulator with live epidemic curves, in-browser epidemic analysis and an interactive data science dashboard. It showcases **agent-based modeling**, **real-time visualization**, and **data science** skills.
 
 ---
 
@@ -8,40 +8,46 @@ Advanced disease spread simulator with interactive data visualization dashboard.
 
 **Simulator:** https://sameeha0.github.io/Disease-Spread-Animation-Web-Game/
 
-**Analysis Dashboard:** [Streamlit Cloud]](https://disease-spread-animation-web-game-tccqs9bdlxcy6uykdsx4mh.streamlit.app/)
+**Analysis Dashboard:** [Streamlit Cloud](https://disease-spread-animation-web-game-tccqs9bdlxcy6uykdsx4mh.streamlit.app/)
+
+![Simulator running](docs/screenshot-live.png)
 
 ## Key Features
 
-### Simulator (index.html) 
-- **Agent-Based Simulation**: 120+ agents with individual states (healthy/infected/recovered/vaccinated)
-- **Real-Time Visualization**: Canvas-based rendering at 60 FPS with agent trails
-- **Spatial Optimization**: Grid-based neighbor lookup for O(1) collision detection
-- **Interactive Parameters**: 7 tunable parameters (population, speed, infection radius, probability, recovery time, vaccination %)
-- **3 Preset Scenarios**: Fast Spread, Vaccinated Population, Low Transmission
-- **Live Statistics**: Real-time population counts, FPS counter, infection curves
-- **Data Import/Export**: Load CSV/JSON, export simulation results
-- **Responsive Design**: Works on desktop and tablet
+### Simulator (index.html)
+- **Agent-Based Simulation**: 20-400 agents, each healthy, infected, recovered or vaccinated
+- **Real-Time Visualization**: high-DPI canvas rendering at 60 FPS with movement trails and a visible infection zone around every infected person
+- **Spatial Optimization**: grid-based neighbor lookup for O(1) contact checks
+- **Interactive Parameters**: 7 tunable parameters, grouped into Population and Transmission; transmission settings change live while the simulation runs
+- **4 Preset Scenarios**: Baseline, Fast Spread, Vaccinated Population, Low Spread (each preset sets every parameter, so scenarios never mix)
+- **Hover to Inspect**: hover over any person to see their state, how long they have been infected, when they recover and who infected them
+- **Stacked Epidemic Curve**: healthy / infected / recovered / vaccinated over time, with the peak marked
+- **In-Browser Analysis** (no backend needed): peak infected and peak time, attack rate, doubling time from a log-linear fit of early growth (with R²), an estimated R₀ and the matching herd-immunity threshold
+- **Outbreak Summary**: the simulation stops by itself when the last person recovers and shows a summary
+- **Data Import/Export**: load CSV/JSON epidemic data (chart + analysis), export simulation results
+- **Keyboard Shortcuts**: <kbd>Space</kbd> start / pause, <kbd>R</kbd> reset
+- **Responsive Design**: desktop, tablet and phone
 
-### Analysis Dashboard (streamlit_app.py) 
-- **Data Visualization**: Multi-layer interactive Plotly charts
-- **File Upload**: Drag-drop CSV/JSON timeseries data
-- **Curve Fitting**: Logistic sigmoid model with R² goodness-of-fit
-- **Peak Analysis**: Identify and analyze infection peaks
-- **Epidemiological Metrics**: 
-  - Attack rate (% infected)
-  - Duration and doubling time
-  - R² fit quality
-  - Daily change rates
-- **Export Results**: Download analysis as CSV
-- **Demo Data**: Built-in synthetic epidemic data for testing
+### Analysis Dashboard (streamlit_app.py)
+- **Data Visualization**: multi-layer interactive Plotly charts
+- **File Upload**: drag-and-drop CSV/JSON timeseries data (for example a file exported from the simulator)
+- **Curve Fitting**: logistic sigmoid model with R² goodness-of-fit
+- **Peak Analysis**: identify and analyze infection peaks
+- **Epidemiological Metrics**: attack rate, duration, doubling time, daily change rates
+- **Export Results**: download analysis as CSV
+- **Demo Data**: built-in synthetic epidemic data for testing
 
-### Code Quality 
-- **Object-Oriented Design**: Agent & Simulation classes with clear separation
-- **Professional Documentation**: 100+ JSDoc comments, section headers
-- **Optimized Performance**: Spatial grid for fast neighbor queries
-- **Clean CSS Architecture**: CSS variables, responsive grid layout
-- **No External Dependencies** (Frontend): Vanilla JS, HTML5 Canvas only
-- **Data Science Stack** (Backend): SciPy, NumPy, Plotly for analysis
+![Outbreak summary and analysis](docs/screenshot-analysis.png)
+
+---
+
+## How the model works
+
+1. **Movement**: every person moves in a random walk and bounces off the walls.
+2. **Contact**: for each infected person, the spatial grid returns nearby people; anyone healthy inside the infection radius can be infected.
+3. **Transmission**: the chance falls linearly with distance. It is converted to the length of each frame, so the spread is the same at any frame rate and on any screen.
+4. **Recovery**: infected people recover after the recovery time and are then immune.
+5. **Analysis**: R₀ is estimated with the SIR approximation R₀ ≈ 1 + r·D, where r is the early exponential growth rate and D the recovery time.
 
 ---
 
@@ -69,76 +75,68 @@ t,healthy,infected,recovered,vaccinated
 
 **View simulator locally:**
 ```bash
-open index.html
+python -m http.server 8000
+# then open http://localhost:8000
 ```
 
 **Run analysis dashboard locally:**
 ```bash
-pip install streamlit plotly scipy pandas
+pip install -r requirements.txt
 streamlit run streamlit_app.py
 ```
 
-Opens interactive dashboard at `http://localhost:8501`
+Opens the interactive dashboard at `http://localhost:8501`
 
 ---
 
 ## Testing Checklist
 
-- [x] **Simulator**: Agents appear on load, click "Start" to begin
-- [x] **Controls**: All sliders and buttons responsive
-- [x] **Data Import**: CSV/JSON files parse correctly
-- [x] **Charts**: Real-time infected/recovered curves draw
-- [x] **Statistics**: Live population counts update
+- [x] **Simulator**: agents appear on load; Start / Space begins the run
+- [x] **Controls**: all sliders, presets and buttons respond; transmission sliders work while running
+- [x] **Hover**: tooltip shows details for the person under the cursor
+- [x] **Outbreak end**: simulation stops and shows a summary when infections reach zero
+- [x] **Analysis**: peak, attack rate, doubling time and R₀ calculate in the browser
+- [x] **Data Import**: CSV/JSON files parse and draw on the chart
+- [x] **Responsive**: no horizontal scrolling at 390 px wide
 - [x] **Dashboard**: Streamlit app loads with demo data
-- [x] **Analysis**: Curve fitting and metrics calculate
-- [x] **Responsive**: Works on desktop and tablet
 
 ---
 
-## Clean Project Structure
+## Project Structure
 
 ```
-├── index.html                    # 102 lines - Main simulator UI
+├── index.html          # Simulator UI
 ├── js/
-│   └── simulation.js            # 789 lines - Agent-based engine + UI logic
+│   └── simulation.js   # Agent-based engine, chart, analysis and UI logic
 ├── css/
-│   └── style.css                # 400+ lines - Responsive design system
-├── streamlit_app.py             # Interactive analysis dashboard
-├── requirements.txt             # Python dependencies
-├── README.md                    # This file
-├── .github/workflows/deploy.yml # GitHub Actions auto-deploy
-├── .streamlit/config.toml       # Streamlit configuration
-└── .gitignore                   # Version control setup
+│   └── style.css       # Design tokens, responsive layout
+├── docs/               # README screenshots
+├── streamlit_app.py    # Interactive analysis dashboard
+├── requirements.txt    # Python dependencies
+└── README.md
 ```
-
-**Total Code**: ~1,400 lines of production-ready code
 
 ---
 
 ## Highlights
 
 **Frontend Skills**
-- Canvas API for real-time 60 FPS visualization
-- Vanilla JavaScript (no frameworks) - OOP design patterns
-- CSS3 responsive layout with modern glassmorphism
-- Event-driven architecture with proper state management
+- Canvas API with high-DPI scaling for real-time 60 FPS visualization
+- Vanilla JavaScript (no frameworks), OOP design with Agent and Simulation classes
+- Design system with CSS custom properties; accessible controls, keyboard shortcuts and reduced-motion support
 
- **Backend Skills**
-- Python scientific computing (SciPy, NumPy)
-- Interactive Streamlit dashboards
-- Statistical analysis: curve fitting, R² metrics, epidemiological models
+**Data Science Skills**
+- Epidemic metrics computed in the browser: log-linear growth fit, doubling time, R₀ estimate
+- Python scientific computing (SciPy, NumPy, pandas) and interactive Streamlit dashboards
 
 **Engineering Skills**
 - Spatial optimization: O(1) neighbor lookup with grid indexing
-- GitHub Actions CI/CD automation
-- Clean code: comprehensive comments, modular architecture
+- Frame-rate-independent transmission model
 - Data processing: CSV/JSON parsing and export
 
- **Full-Stack Integration**
-- Frontend runs on GitHub Pages
+**Deployment**
+- Simulator on GitHub Pages (deploys from the `main` branch)
 - Dashboard on Streamlit Cloud
-- Both deploy automatically on git push
-- Zero configuration required
 
 ---
 ## 📜 License
@@ -147,8 +145,3 @@ Copyright © 2026 Sameeha. All rights reserved.
 This project is proprietary software. Unauthorized copying, modification, distribution, or use of this code, in whole or in part, for any purpose (commercial or non-commercial) is strictly prohibited without the prior written permission of the author.
 
 For permission requests, please contact: sameeharaza07@gmail.com
-
-
-
-
-

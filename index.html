@@ -3,98 +3,169 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Disease Spread Simulation</title>
+  <title>Disease Spread Simulator</title>
+  <meta name="description" content="Agent-based disease spread simulator with live epidemic curves and in-browser analysis." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect width='20' height='20' rx='5' fill='%233b82f6'/%3E%3Ccircle cx='10' cy='10' r='4' fill='%23ff6b6b'/%3E%3Ccircle cx='10' cy='10' r='6.5' fill='none' stroke='%23ff6b6b' stroke-opacity='.45'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"><span></span></span>
+      <div>
+        <h1>Disease Spread Simulator</h1>
+        <p>Agent-based model of how an infection moves through a population</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span id="statusPill" class="status-pill" data-status="ready">Ready</span>
+      <a class="link" href="https://disease-spread-animation-web-game-tccqs9bdlxcy6uykdsx4mh.streamlit.app/" target="_blank" rel="noopener">Analysis dashboard ↗</a>
+    </div>
+  </header>
+
   <div class="app">
-    <div class="panel controls">
-      <h2 style="margin:0 0 8px;color:#e6f3ff">Disease Spread Simulation</h2>
-      <div class="small" style="margin-bottom:8px">Client-side simulation demonstrating infection dynamics, tuned for performance.</div>
-
-      <h3>Parameters</h3>
-      <label>Population: <span id="popVal">120</span>
-        <input id="population" type="range" min="20" max="400" value="120">
-      </label>
-
-      <label>Initial Infected: <span id="initVal">3</span>
-        <input id="initialInfected" type="range" min="1" max="50" value="3">
-      </label>
-
-      <label>Movement Speed: <span id="speedVal">1.0</span>
-        <input id="speed" type="range" min="0" max="3" step="0.1" value="1">
-      </label>
-
-      <label>Infection Radius: <span id="radiusVal">14</span>
-        <input id="radius" type="range" min="6" max="60" value="14">
-      </label>
-
-      <label>Base Infection Prob (%): <span id="probVal">45</span>
-        <input id="prob" type="range" min="0" max="100" value="45">
-      </label>
-
-      <label>Recovery Time (s): <span id="recVal">12</span>
-        <input id="recovery" type="range" min="2" max="60" value="12">
-      </label>
-
-      <label>Vaccinated (%): <span id="vacVal">0</span>
-        <input id="vaccinated" type="range" min="0" max="100" value="0">
-      </label>
-
-      <div style="margin-top:8px" class="row">
-        <button id="start">Start</button>
-        <button id="pause" class="secondary">Pause</button>
-        <button id="reset" class="secondary">Reset</button>
-      </div>
-
-      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-        <button class="preset" id="presetFast">Fast Spread</button>
-        <button class="preset" id="presetVacc">Vaccinated</button>
-        <button class="preset" id="presetLow">Low Spread</button>
-      </div>
-
-      <h3 style="margin-top:10px">Export / Options</h3>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button id="exportCSV" class="secondary">Export CSV</button>
-        <button id="exportJSON" class="secondary">Export JSON</button>
-      </div>
-
-      <h3 style="margin-top:10px">Import Data</h3>
-      <div style="display:flex;gap:8px;flex-direction:column">
-        <input id="importFile" type="file" accept=".csv,.json" style="padding:6px;border-radius:6px;background:rgba(255,255,255,0.04);color:#e6eef8;border:1px solid rgba(255,255,255,0.08);cursor:pointer">
-        <button id="importBtn" class="secondary">Load Data</button>
-      </div>
-
-      <h3 style="margin-top:10px">Statistical Analysis</h3>
-      <div style="display:flex;gap:8px;flex-direction:column">
-        <button id="analyzeBtn" class="secondary">Analyze Data</button>
-        <div id="analysisResults" style="margin-top:8px;padding:8px;background:rgba(255,255,255,0.02);border-radius:6px;font-size:12px;max-height:200px;overflow-y:auto;display:none;color:#cfe7ff">
-          <div style="white-space:pre-wrap;font-family:monospace" id="analysisText"></div>
+    <!-- ================= Controls ================= -->
+    <aside class="sidebar" aria-label="Simulation controls">
+      <section class="card">
+        <h2 class="card-title">Scenario</h2>
+        <div class="presets">
+          <button class="preset" id="presetBase" data-active="true">
+            <span class="preset-name">Baseline</span><span class="preset-desc">Default settings</span>
+          </button>
+          <button class="preset" id="presetFast">
+            <span class="preset-name">Fast spread</span><span class="preset-desc">Crowded, contagious</span>
+          </button>
+          <button class="preset" id="presetVacc">
+            <span class="preset-name">Vaccinated</span><span class="preset-desc">60% immune</span>
+          </button>
+          <button class="preset" id="presetLow">
+            <span class="preset-name">Low spread</span><span class="preset-desc">Distancing</span>
+          </button>
         </div>
-      </div>
+      </section>
 
-      <div style="margin-top:12px" class="small">Hover over agents on canvas to see details. You can change parameters during simulation.</div>
-    </div>
+      <section class="card">
+        <h2 class="card-title">Population</h2>
+        <div class="field">
+          <label for="population">Population <output id="popVal">120</output></label>
+          <input id="population" type="range" min="20" max="400" value="120">
+        </div>
+        <div class="field">
+          <label for="initialInfected">Initially infected <output id="initVal">3</output></label>
+          <input id="initialInfected" type="range" min="1" max="50" value="3">
+        </div>
+        <div class="field">
+          <label for="vaccinated">Vaccinated <output><span id="vacVal">0</span>%</output></label>
+          <input id="vaccinated" type="range" min="0" max="100" value="0">
+        </div>
+        <p class="hint" id="popHint">Changing these builds a fresh population (or on Reset while running).</p>
+      </section>
 
-    <div id="canvasWrap">
-      <div class="panel" style="flex:1;display:flex;flex-direction:column;padding:8px;">
-        <canvas id="simCanvas"></canvas>
-        <div class="stats" style="margin-top:8px">
-          <div class="stat"><span class="small">Healthy</span><b id="healthyCount">0</b></div>
-          <div class="stat"><span class="small">Infected</span><b id="infectedCount">0</b></div>
-          <div class="stat"><span class="small">Recovered</span><b id="recoveredCount">0</b></div>
-          <div class="stat"><span class="small">Vaccinated</span><b id="vaccinatedCount">0</b></div>
+      <section class="card">
+        <h2 class="card-title">Transmission</h2>
+        <div class="field">
+          <label for="speed">Movement speed <output id="speedVal">1.0</output></label>
+          <input id="speed" type="range" min="0" max="3" step="0.1" value="1">
+        </div>
+        <div class="field">
+          <label for="radius">Infection radius <output><span id="radiusVal">14</span> px</output></label>
+          <input id="radius" type="range" min="6" max="60" value="14">
+        </div>
+        <div class="field">
+          <label for="prob">Infection chance <output><span id="probVal">45</span>%</output></label>
+          <input id="prob" type="range" min="0" max="100" value="45">
+        </div>
+        <div class="field">
+          <label for="recovery">Recovery time <output><span id="recVal">12</span> s</output></label>
+          <input id="recovery" type="range" min="2" max="60" value="12">
+        </div>
+        <p class="hint">Transmission settings change live, even while running.</p>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Data</h2>
+        <div class="button-row">
+          <button id="exportCSV" class="btn">Export CSV</button>
+          <button id="exportJSON" class="btn">Export JSON</button>
+        </div>
+        <label class="dropzone" for="importFile">
+          <input id="importFile" type="file" accept=".csv,.json">
+          <span id="importLabel">Choose a CSV or JSON file to import</span>
+        </label>
+        <button id="importBtn" class="btn btn-block">Load data</button>
+      </section>
+    </aside>
+
+    <!-- ================= Stage ================= -->
+    <main class="main">
+      <section class="card stage-card">
+        <div class="stage-toolbar">
+          <div class="button-row">
+            <button id="start" class="btn btn-primary">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
+              <span>Start</span>
+            </button>
+            <button id="pause" class="btn">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5h3v11H4zM9 2.5h3v11H9z" fill="currentColor"/></svg>
+              <span>Pause</span>
+            </button>
+            <button id="reset" class="btn">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8a5 5 0 1 0 1.5-3.5M3 2.5V5h2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>Reset</span>
+            </button>
+          </div>
+          <div class="clock">
+            <span>Time <b id="timeLabel">0s</b></span>
+            <span>FPS <b id="fps">0</b></span>
+          </div>
         </div>
 
-        <canvas id="chart"></canvas>
-        <div class="footer">
-          <div class="small">Time: <span id="timeLabel">0s</span></div>
-          <div class="small">FPS: <span id="fps">0</span></div>
+        <div id="stage" class="stage">
+          <canvas id="simCanvas" aria-label="Simulation of moving people; colours show health state"></canvas>
+          <div class="legend" aria-hidden="true">
+            <span><i class="dot healthy"></i>Healthy</span>
+            <span><i class="dot infected"></i>Infected</span>
+            <span><i class="dot recovered"></i>Recovered</span>
+            <span><i class="dot vaccinated"></i>Vaccinated</span>
+          </div>
+          <div id="tooltip" class="tooltip" hidden></div>
+          <div id="endBanner" class="end-banner" hidden></div>
         </div>
-        <div id="tooltip" class="tooltip" style="display:none"></div>
+        <p class="shortcuts"><kbd>Space</kbd> start / pause &middot; <kbd>R</kbd> reset &middot; hover over a person to inspect them</p>
+      </section>
+
+      <section class="stats" aria-label="Population counts">
+        <div class="stat card" data-state="healthy"><span class="stat-label">Healthy</span><b id="healthyCount">0</b><span class="stat-share"><i id="healthyBar"></i></span></div>
+        <div class="stat card" data-state="infected"><span class="stat-label">Infected</span><b id="infectedCount">0</b><span class="stat-share"><i id="infectedBar"></i></span></div>
+        <div class="stat card" data-state="recovered"><span class="stat-label">Recovered</span><b id="recoveredCount">0</b><span class="stat-share"><i id="recoveredBar"></i></span></div>
+        <div class="stat card" data-state="vaccinated"><span class="stat-label">Vaccinated</span><b id="vaccinatedCount">0</b><span class="stat-share"><i id="vaccinatedBar"></i></span></div>
+      </section>
+
+      <div class="lower">
+        <section class="card chart-card">
+          <div class="card-head">
+            <h2 class="card-title">Epidemic curve</h2>
+            <span class="muted" id="chartSource">Live simulation</span>
+          </div>
+          <div class="chart-wrap"><canvas id="chart" aria-label="Stacked area chart of population states over time"></canvas></div>
+        </section>
+
+        <section class="card analysis-card">
+          <div class="card-head">
+            <h2 class="card-title">Analysis</h2>
+            <button id="analyzeBtn" class="btn btn-small">Analyze</button>
+          </div>
+          <div id="analysisResults" class="metrics" hidden></div>
+          <p id="analysisEmpty" class="muted">Run the simulation (or import data), then press Analyze to see the peak, attack rate, doubling time and an estimated R<sub>0</sub>.</p>
+        </section>
       </div>
-    </div>
+    </main>
   </div>
+
+  <div id="notice" class="notice" role="status" hidden></div>
 
   <script src="js/simulation.js" defer></script>
 </body>
